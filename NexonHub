@@ -177,7 +177,7 @@ end)
 
 -- === PETLA MARKET & CRAFT ===
 task.spawn(function()
-    while task.wait(2) do
+    while task.wait(0.01) do
         if getgenv().Config.autoBuy then
             pcall(function() BlackMarketRemote:FireServer() end)
         end

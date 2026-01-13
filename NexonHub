@@ -1,0 +1,145 @@
+-- Funkcja, która sprawia, że skrypt przeżywa teleportację (jak Infinite Yield)
+if queue_on_teleport then
+    queue_on_teleport([[
+        repeat task.wait() until game:IsLoaded()
+        loadstring(game:HttpGet('TWOJ_LINK_LUB_SKRYPT'))() 
+    ]])
+end
+-- UWAGA: Powyższy link to przykład. Jeśli używasz pliku lokalnego, 
+-- executor sam go odpali z folderu autoexecute.
+
+-- Zapobieganie dublowaniu
+if getgenv().NexonHubLoaded then return end
+getgenv().NexonHubLoaded = true
+
+local success, Rayfield = pcall(function()
+    return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+end)
+
+if not success or not Rayfield then return end
+
+local Window = Rayfield:CreateWindow({
+   Name = "NexonHub V31 - AUTO-QUEUE",
+   LoadingTitle = "Synchronizacja międzyinstancyjna...",
+   LoadingSubtitle = "by .4k1_",
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = "NexonHub_Settings",
+      FileName = "CrossPiece_Config"
+   },
+   KeySystem = false
+})
+
+-- Usługi i Remotes
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Czekanie na obiekty (ważne przy teleportacji, bo gra się ładuje)
+local PowerRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("PowerRemote")
+local WeaponRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("WeaponEquips")
+
+getgenv().Config = {
+    autoFarm = false,
+    laserActive = false,
+    autoNext = false
+}
+
+local laserRunning = false
+
+-- === LOGIKA NAMIERZANIA ===
+local function getClosestMob()
+    local target = nil
+    local shortestDist = math.huge
+    local charFolder = Workspace:FindFirstChild("Characters")
+    if charFolder then
+        for _, v in pairs(charFolder:GetChildren()) do
+            if v:FindFirstChild("Humanoid") and v:FindFirstChild("HumanoidRootPart") and v.Humanoid.Health > 0 then
+                if not Players:GetPlayerFromCharacter(v) then
+                    local d = (LocalPlayer.Character.HumanoidRootPart.Position - v.HumanoidRootPart.Position).Magnitude
+                    if d < shortestDist then shortestDist = d; target = v end
+                end
+            end
+        end
+    end
+    return target
+end
+
+-- === ZAKŁADKI ===
+local DungTab = Window:CreateTab("Auto Dungeon", 4483362458)
+
+DungTab:CreateToggle({
+   Name = "Auto-Farm (TP)",
+   CurrentValue = false,
+   Flag = "autoFarm",
+   Callback = function(Value) getgenv().Config.autoFarm = Value end,
+})
+
+DungTab:CreateToggle({
+   Name = "Infinite Laser (Remote)",
+   CurrentValue = false,
+   Flag = "laserActive",
+   Callback = function(Value) getgenv().Config.laserActive = Value end,
+})
+
+DungTab:CreateToggle({
+   Name = "Auto-Next/Claim",
+   CurrentValue = false,
+   Flag = "autoNext",
+   Callback = function(Value) getgenv().Config.autoNext = Value end,
+})
+
+-- === PĘTLA LASERA (REMOTE) ===
+task.spawn(function()
+    while true do
+        local cfg = getgenv().Config
+        local target = getClosestMob()
+
+        if cfg.laserActive and cfg.autoFarm and target then
+            if not laserRunning then
+                pcall(function() PowerRemote:FireServer() end)
+                laserRunning = true
+            end
+        elseif laserRunning and (not cfg.laserActive or not cfg.autoFarm or not target) then
+            -- Koniec lasera z argumentami które podałeś
+            local endArgs = {[1] = "end", [2] = 2, [3] = {["MouseHit"] = LocalPlayer.Character.HumanoidRootPart.CFrame}}
+            pcall(function() PowerRemote:FireServer(unpack(endArgs)) end)
+            laserRunning = false
+        end
+        task.wait(0.3)
+    end
+end)
+
+-- === PĘTLA RUCHU (TP) ===
+RunService.Heartbeat:Connect(function()
+    local cfg = getgenv().Config
+    if cfg.autoFarm and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        pcall(function() WeaponRemote:FireServer("equip") end)
+        local target = getClosestMob()
+        if target then
+            -- Idealne ustawienie nad mobem
+            LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(target.HumanoidRootPart.Position + Vector3.new(0, 11, 0), target.HumanoidRootPart.Position)
+            LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
+        end
+    end
+end)
+
+-- === AUTO-NEXT ===
+task.spawn(function()
+    while task.wait(1) do
+        if getgenv().Config.autoNext then
+            pcall(function()
+                for _, v in pairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                    if v:IsA("TextButton") and v.Visible and (v.Text:lower():find("next") or v.Text:lower():find("claim")) then
+                        firesignal(v.MouseButton1Click)
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- Ładowanie zapisu
+Rayfield:LoadConfiguration()

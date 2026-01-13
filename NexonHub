@@ -2,7 +2,7 @@
 if queue_on_teleport then
     queue_on_teleport([[
         repeat task.wait() until game:IsLoaded()
-        loadstring(game:HttpGet('TWOJ_LINK_LUB_SKRYPT'))() 
+        loadstring(game:HttpGet('https://raw.githubusercontent.com/4k1-Nexonhub/NexonHub/refs/heads/main/NexonHub'))() 
     ]])
 end
 -- UWAGA: Powyższy link to przykład. Jeśli używasz pliku lokalnego, 

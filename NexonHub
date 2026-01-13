@@ -1,9 +1,7 @@
--- NexonHub V32 - Final Masterpiece
+-- NexonHub V34 - FINAL MASTER (FAVORITES & GATES)
+-- Używamy queue_on_teleport, aby skrypt odświeżał się przy zmianie mapy
 if queue_on_teleport then
-    queue_on_teleport([[
-        repeat task.wait() until game:IsLoaded()
-        -- Skrypt odświeży się automatycznie po TP jeśli jest w autoexecute
-    ]])
+    queue_on_teleport([[repeat task.wait() until game:IsLoaded()]])
 end
 
 if getgenv().NexonHubLoaded then return end
@@ -15,14 +13,31 @@ end)
 
 if not success or not Rayfield then return end
 
+-- --- SYSTEM ZAPISYWANIA ULUBIONYCH ---
+if not isfolder("NexonHub_Settings") then makefolder("NexonHub_Settings") end
+local favFile = "NexonHub_Settings/Favorites_V34.json"
+local HttpService = game:GetService("HttpService")
+
+local Favorites = {}
+if isfile(favFile) then
+    pcall(function()
+        Favorites = HttpService:JSONDecode(readfile(favFile))
+    end)
+end
+
+local function saveFavorites()
+    writefile(favFile, HttpService:JSONEncode(Favorites))
+end
+
+-- --- OKNO GŁÓWNE ---
 local Window = Rayfield:CreateWindow({
-   Name = "NexonHub V32 - Master Edition",
-   LoadingTitle = "Organizing NPC & Portals...",
+   Name = "NexonHub V34 - GATES & FAVORITES",
+   LoadingTitle = "Ładowanie bram i ulubionych...",
    LoadingSubtitle = "by .4k1_",
    ConfigurationSaving = {
       Enabled = true,
       FolderName = "NexonHub_Settings",
-      FileName = "CrossPiece_V32"
+      FileName = "CrossPiece_V34"
    },
    KeySystem = false
 })
@@ -39,18 +54,124 @@ local PowerRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Powe
 local WeaponRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("WeaponEquips")
 local BlackMarketRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BlackMarket")
 
--- Stan
+-- Stan Globalny
 getgenv().Config = {
     autoFarm = false,
     laserActive = false,
     autoNext = false,
-    autoBuy = false,
-    autoCraft = false
+    autoBuy = false
 }
 
 local laserRunning = false
 
--- === LOGIKA NAMIERZANIA ===
+-- --- ZAKŁADKI ---
+local DungTab = Window:CreateTab("Auto Dungeon", 4483362458)
+local MarketTab = Window:CreateTab("Market & Crafting", 4483362458)
+local TpTab = Window:CreateTab("Teleports", 4483362458)
+
+-- --- SEKCJA: DUNGEON ---
+DungTab:CreateToggle({
+   Name = "Auto-Farm (TP ABOVE)",
+   CurrentValue = false,
+   Flag = "autoFarm",
+   Callback = function(Value) getgenv().Config.autoFarm = Value end,
+})
+
+DungTab:CreateToggle({
+   Name = "Infinite Laser (Remote Hold)",
+   CurrentValue = false,
+   Flag = "laserActive",
+   Callback = function(Value) getgenv().Config.laserActive = Value end,
+})
+
+DungTab:CreateToggle({
+   Name = "Auto-Next/Claim",
+   CurrentValue = false,
+   Flag = "autoNext",
+   Callback = function(Value) getgenv().Config.autoNext = Value end,
+})
+
+-- --- SEKCJA: MARKET ---
+MarketTab:CreateToggle({
+   Name = "ULTRA-FAST Black Market (0.1s)",
+   CurrentValue = false,
+   Flag = "autoBuy",
+   Callback = function(Value) getgenv().Config.autoBuy = Value end,
+})
+
+-- --- SEKCJA: TELEPORTY (ULUBIONE I BRAMY) ---
+local function LoadTeleportUI()
+    local talkable = Workspace:WaitForChild("Talkable", 5)
+    local allNpcs = {}
+    
+    if talkable then
+        for _, npc in pairs(talkable:GetChildren()) do
+            allNpcs[npc.Name] = npc
+        end
+    end
+
+    -- 1. ULUBIONE (Pobierane z pliku JSON)
+    TpTab:CreateSection("⭐ ULUBIONE ⭐")
+    for name, _ in pairs(Favorites) do
+        if allNpcs[name] then
+            local npc = allNpcs[name]
+            TpTab:CreateButton({
+                Name = "⭐ " .. name,
+                Callback = function()
+                    local cf = npc:IsA("Model") and npc:GetModelCFrame() or npc.CFrame
+                    LocalPlayer.Character.HumanoidRootPart.CFrame = cf * CFrame.new(0, 3, 0)
+                end
+            })
+        end
+    end
+
+    -- 2. PORTALE I BRAMY (F, E, D, C Tier itp.)
+    TpTab:CreateSection("--- Portale i Bramy (Gates) ---")
+    for name, npc in pairs(allNpcs) do
+        local ln = name:lower()
+        if (ln:find("portal") or ln:find("gate") or ln:find("tier")) and not Favorites[name] then
+            TpTab:CreateButton({
+                Name = "Portal: " .. name,
+                Callback = function()
+                    local cf = npc:IsA("Model") and npc:GetModelCFrame() or npc.CFrame
+                    LocalPlayer.Character.HumanoidRootPart.CFrame = cf * CFrame.new(0, 3, 0)
+                end
+            })
+        end
+    end
+
+    -- 3. RESZTA NPC
+    TpTab:CreateSection("--- Pozostałe NPC ---")
+    for name, npc in pairs(allNpcs) do
+        local ln = name:lower()
+        if not Favorites[name] and not (ln:find("portal") or ln:find("gate") or ln:find("tier")) then
+            TpTab:CreateButton({
+                Name = name,
+                Callback = function()
+                    local cf = npc:IsA("Model") and npc:GetModelCFrame() or npc.CFrame
+                    LocalPlayer.Character.HumanoidRootPart.CFrame = cf * CFrame.new(0, 3, 0)
+                end
+            })
+        end
+    end
+
+    -- 4. GWIAZDKOWANIE (Zarządzanie)
+    TpTab:CreateSection("--- Dodaj do Ulubionych (Gwiazdka) ---")
+    for name, _ in pairs(allNpcs) do
+        TpTab:CreateToggle({
+            Name = "Gwiazdka: " .. name,
+            CurrentValue = Favorites[name] or false,
+            Callback = function(Value)
+                if Value then Favorites[name] = true else Favorites[name] = nil end
+                saveFavorites()
+                Rayfield:Notify({Title = "Zapisano", Content = "Zrestartuj skrypt po teleportacji, aby odświeżyć listę.", Duration = 2})
+            end
+        })
+    end
+end
+LoadTeleportUI()
+
+-- --- LOGIKA NAMIERZANIA ---
 local function getClosestMob()
     local target = nil
     local shortestDist = math.huge
@@ -68,99 +189,11 @@ local function getClosestMob()
     return target
 end
 
--- === TABS ===
-local DungTab = Window:CreateTab("Auto Dungeon", 4483362458)
-local MarketTab = Window:CreateTab("Market & Crafting", 4483362458)
-local TpTab = Window:CreateTab("Teleports", 4483362458)
-
--- --- TAB: DUNGEON ---
-DungTab:CreateToggle({
-   Name = "Auto-Farm (TP ABOVE)",
-   CurrentValue = false,
-   Flag = "autoFarm",
-   Callback = function(Value) getgenv().Config.autoFarm = Value end,
-})
-
-DungTab:CreateToggle({
-   Name = "Infinite Laser (PowerRemote)",
-   CurrentValue = false,
-   Flag = "laserActive",
-   Callback = function(Value) getgenv().Config.laserActive = Value end,
-})
-
-DungTab:CreateToggle({
-   Name = "Auto-Next/Claim",
-   CurrentValue = false,
-   Flag = "autoNext",
-   Callback = function(Value) getgenv().Config.autoNext = Value end,
-})
-
--- --- TAB: MARKET & CRAFT ---
-MarketTab:CreateToggle({
-   Name = "Auto-Buy Black Market",
-   CurrentValue = false,
-   Flag = "autoBuy",
-   Callback = function(Value) getgenv().Config.autoBuy = Value end,
-})
-
-MarketTab:CreateToggle({
-   Name = "Auto-Crafting (Tickets)",
-   CurrentValue = false,
-   Flag = "autoCraft",
-   Callback = function(Value) getgenv().Config.autoCraft = Value end,
-})
-
--- --- TAB: TELEPORTS (ORGANIZED) ---
-local function LoadTeleports()
-    local talkable = Workspace:WaitForChild("Talkable", 5)
-    local addedNpcs = {}
-    
-    -- Najpierw Portale (Dungeony) obok siebie
-    TpTab:CreateSection("--- Dungeon Portals ---")
-    if talkable then
-        for _, npc in pairs(talkable:GetChildren()) do
-            local name = npc.Name
-            if name:lower():find("portal") or name:lower():find("dungeon") then
-                if not addedNpcs[name] then
-                    TpTab:CreateButton({
-                        Name = "Portal: " .. name,
-                        Callback = function()
-                            local cf = npc:IsA("Model") and npc:GetModelCFrame() or npc.CFrame
-                            LocalPlayer.Character.HumanoidRootPart.CFrame = cf * CFrame.new(0, 3, 0)
-                        end
-                    })
-                    addedNpcs[name] = true
-                end
-            end
-        end
-    end
-
-    -- Reszta NPC (Pojedynczo)
-    TpTab:CreateSection("--- Common NPCs ---")
-    if talkable then
-        for _, npc in pairs(talkable:GetChildren()) do
-            local name = npc.Name
-            if not addedNpcs[name] then
-                TpTab:CreateButton({
-                    Name = name,
-                    Callback = function()
-                        local cf = npc:IsA("Model") and npc:GetModelCFrame() or npc.CFrame
-                        LocalPlayer.Character.HumanoidRootPart.CFrame = cf * CFrame.new(0, 3, 0)
-                    end
-                })
-                addedNpcs[name] = true
-            end
-        end
-    end
-end
-LoadTeleports()
-
--- === PETLA LASERA ===
+-- --- PĘTLA LASERA ---
 task.spawn(function()
     while true do
         local cfg = getgenv().Config
         local target = getClosestMob()
-
         if cfg.laserActive and cfg.autoFarm and target then
             if not laserRunning then
                 pcall(function() PowerRemote:FireServer() end)
@@ -171,21 +204,23 @@ task.spawn(function()
             pcall(function() PowerRemote:FireServer(unpack(endArgs)) end)
             laserRunning = false
         end
-        task.wait(0.3)
+        task.wait(0.2)
     end
 end)
 
--- === PETLA MARKET & CRAFT ===
+-- --- PĘTLA BLACK MARKET ---
 task.spawn(function()
-    while task.wait(0.01) do
+    while true do
         if getgenv().Config.autoBuy then
             pcall(function() BlackMarketRemote:FireServer() end)
+            task.wait(0.1)
+        else
+            task.wait(0.5)
         end
-        -- Tutaj możesz dodać specyficzny Remote do craftingu jeśli go znasz
     end
 end)
 
--- === PETLA TP & EQUIP ===
+-- --- PĘTLA RUCHU (TP) ---
 RunService.Heartbeat:Connect(function()
     local cfg = getgenv().Config
     if cfg.autoFarm and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -198,13 +233,13 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- === AUTO-NEXT ===
+-- --- AUTO-NEXT ---
 task.spawn(function()
-    while task.wait(1.5) do
+    while task.wait(1) do
         if getgenv().Config.autoNext then
             pcall(function()
                 for _, v in pairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                    if v:IsA("TextButton") and v.Visible and (v.Text:lower():find("next") or v.Text:lower():find("claim") or v.Text:lower():find("continue")) then
+                    if v:IsA("TextButton") and v.Visible and (v.Text:lower():find("next") or v.Text:lower():find("claim")) then
                         firesignal(v.MouseButton1Click)
                     end
                 end
@@ -214,3 +249,4 @@ task.spawn(function()
 end)
 
 Rayfield:LoadConfiguration()
+Rayfield:Notify({Title = "NexonHub V34 Załadowany", Content = "Bramy i ulubione teleporty są gotowe.", Duration = 5})

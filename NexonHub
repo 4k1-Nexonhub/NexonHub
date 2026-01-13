@@ -1,14 +1,11 @@
--- Funkcja, która sprawia, że skrypt przeżywa teleportację (jak Infinite Yield)
+-- NexonHub V32 - Final Masterpiece
 if queue_on_teleport then
     queue_on_teleport([[
         repeat task.wait() until game:IsLoaded()
-        loadstring(game:HttpGet('https://raw.githubusercontent.com/4k1-Nexonhub/NexonHub/refs/heads/main/NexonHub'))() 
+        -- Skrypt odświeży się automatycznie po TP jeśli jest w autoexecute
     ]])
 end
--- UWAGA: Powyższy link to przykład. Jeśli używasz pliku lokalnego, 
--- executor sam go odpali z folderu autoexecute.
 
--- Zapobieganie dublowaniu
 if getgenv().NexonHubLoaded then return end
 getgenv().NexonHubLoaded = true
 
@@ -19,32 +16,36 @@ end)
 if not success or not Rayfield then return end
 
 local Window = Rayfield:CreateWindow({
-   Name = "NexonHub V31 - AUTO-QUEUE",
-   LoadingTitle = "Synchronizacja międzyinstancyjna...",
+   Name = "NexonHub V32 - Master Edition",
+   LoadingTitle = "Organizing NPC & Portals...",
    LoadingSubtitle = "by .4k1_",
    ConfigurationSaving = {
       Enabled = true,
       FolderName = "NexonHub_Settings",
-      FileName = "CrossPiece_Config"
+      FileName = "CrossPiece_V32"
    },
    KeySystem = false
 })
 
--- Usługi i Remotes
+-- Usługi
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
--- Czekanie na obiekty (ważne przy teleportacji, bo gra się ładuje)
+-- Remotes
 local PowerRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("PowerRemote")
 local WeaponRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("WeaponEquips")
+local BlackMarketRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("BlackMarket")
 
+-- Stan
 getgenv().Config = {
     autoFarm = false,
     laserActive = false,
-    autoNext = false
+    autoNext = false,
+    autoBuy = false,
+    autoCraft = false
 }
 
 local laserRunning = false
@@ -67,18 +68,21 @@ local function getClosestMob()
     return target
 end
 
--- === ZAKŁADKI ===
+-- === TABS ===
 local DungTab = Window:CreateTab("Auto Dungeon", 4483362458)
+local MarketTab = Window:CreateTab("Market & Crafting", 4483362458)
+local TpTab = Window:CreateTab("Teleports", 4483362458)
 
+-- --- TAB: DUNGEON ---
 DungTab:CreateToggle({
-   Name = "Auto-Farm (TP)",
+   Name = "Auto-Farm (TP ABOVE)",
    CurrentValue = false,
    Flag = "autoFarm",
    Callback = function(Value) getgenv().Config.autoFarm = Value end,
 })
 
 DungTab:CreateToggle({
-   Name = "Infinite Laser (Remote)",
+   Name = "Infinite Laser (PowerRemote)",
    CurrentValue = false,
    Flag = "laserActive",
    Callback = function(Value) getgenv().Config.laserActive = Value end,
@@ -91,7 +95,67 @@ DungTab:CreateToggle({
    Callback = function(Value) getgenv().Config.autoNext = Value end,
 })
 
--- === PĘTLA LASERA (REMOTE) ===
+-- --- TAB: MARKET & CRAFT ---
+MarketTab:CreateToggle({
+   Name = "Auto-Buy Black Market",
+   CurrentValue = false,
+   Flag = "autoBuy",
+   Callback = function(Value) getgenv().Config.autoBuy = Value end,
+})
+
+MarketTab:CreateToggle({
+   Name = "Auto-Crafting (Tickets)",
+   CurrentValue = false,
+   Flag = "autoCraft",
+   Callback = function(Value) getgenv().Config.autoCraft = Value end,
+})
+
+-- --- TAB: TELEPORTS (ORGANIZED) ---
+local function LoadTeleports()
+    local talkable = Workspace:WaitForChild("Talkable", 5)
+    local addedNpcs = {}
+    
+    -- Najpierw Portale (Dungeony) obok siebie
+    TpTab:CreateSection("--- Dungeon Portals ---")
+    if talkable then
+        for _, npc in pairs(talkable:GetChildren()) do
+            local name = npc.Name
+            if name:lower():find("portal") or name:lower():find("dungeon") then
+                if not addedNpcs[name] then
+                    TpTab:CreateButton({
+                        Name = "Portal: " .. name,
+                        Callback = function()
+                            local cf = npc:IsA("Model") and npc:GetModelCFrame() or npc.CFrame
+                            LocalPlayer.Character.HumanoidRootPart.CFrame = cf * CFrame.new(0, 3, 0)
+                        end
+                    })
+                    addedNpcs[name] = true
+                end
+            end
+        end
+    end
+
+    -- Reszta NPC (Pojedynczo)
+    TpTab:CreateSection("--- Common NPCs ---")
+    if talkable then
+        for _, npc in pairs(talkable:GetChildren()) do
+            local name = npc.Name
+            if not addedNpcs[name] then
+                TpTab:CreateButton({
+                    Name = name,
+                    Callback = function()
+                        local cf = npc:IsA("Model") and npc:GetModelCFrame() or npc.CFrame
+                        LocalPlayer.Character.HumanoidRootPart.CFrame = cf * CFrame.new(0, 3, 0)
+                    end
+                })
+                addedNpcs[name] = true
+            end
+        end
+    end
+end
+LoadTeleports()
+
+-- === PETLA LASERA ===
 task.spawn(function()
     while true do
         local cfg = getgenv().Config
@@ -103,7 +167,6 @@ task.spawn(function()
                 laserRunning = true
             end
         elseif laserRunning and (not cfg.laserActive or not cfg.autoFarm or not target) then
-            -- Koniec lasera z argumentami które podałeś
             local endArgs = {[1] = "end", [2] = 2, [3] = {["MouseHit"] = LocalPlayer.Character.HumanoidRootPart.CFrame}}
             pcall(function() PowerRemote:FireServer(unpack(endArgs)) end)
             laserRunning = false
@@ -112,14 +175,23 @@ task.spawn(function()
     end
 end)
 
--- === PĘTLA RUCHU (TP) ===
+-- === PETLA MARKET & CRAFT ===
+task.spawn(function()
+    while task.wait(2) do
+        if getgenv().Config.autoBuy then
+            pcall(function() BlackMarketRemote:FireServer() end)
+        end
+        -- Tutaj możesz dodać specyficzny Remote do craftingu jeśli go znasz
+    end
+end)
+
+-- === PETLA TP & EQUIP ===
 RunService.Heartbeat:Connect(function()
     local cfg = getgenv().Config
     if cfg.autoFarm and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
         pcall(function() WeaponRemote:FireServer("equip") end)
         local target = getClosestMob()
         if target then
-            -- Idealne ustawienie nad mobem
             LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(target.HumanoidRootPart.Position + Vector3.new(0, 11, 0), target.HumanoidRootPart.Position)
             LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
         end
@@ -128,11 +200,11 @@ end)
 
 -- === AUTO-NEXT ===
 task.spawn(function()
-    while task.wait(1) do
+    while task.wait(1.5) do
         if getgenv().Config.autoNext then
             pcall(function()
                 for _, v in pairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                    if v:IsA("TextButton") and v.Visible and (v.Text:lower():find("next") or v.Text:lower():find("claim")) then
+                    if v:IsA("TextButton") and v.Visible and (v.Text:lower():find("next") or v.Text:lower():find("claim") or v.Text:lower():find("continue")) then
                         firesignal(v.MouseButton1Click)
                     end
                 end
@@ -141,5 +213,4 @@ task.spawn(function()
     end
 end)
 
--- Ładowanie zapisu
 Rayfield:LoadConfiguration()
